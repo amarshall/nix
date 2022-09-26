@@ -87,6 +87,28 @@ static void initAWS()
     });
 }
 
+static std::shared_ptr<Aws::Auth::AWSCredentialsProvider> initAWSCredentials(const std::string & profile) {
+    std::optional<std::string> oldProfile = std::nullopt;
+
+    if (profile != "") {
+        oldProfile = getEnv("AWS_PROFILE");
+        setenv("AWS_PROFILE", profile.c_str(), true);
+    }
+
+    auto provider = std::dynamic_pointer_cast<Aws::Auth::AWSCredentialsProvider>(
+            std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>());
+
+    if (profile != "") {
+        if (oldProfile) {
+            setenv("AWS_PROFILE", oldProfile.value().c_str(), true);
+        } else {
+            unsetenv("AWS_PROFILE");
+        }
+    }
+
+    return provider;
+}
+
 S3Helper::S3Helper(
     const std::string & profile,
     const std::string & region,
@@ -94,11 +116,7 @@ S3Helper::S3Helper(
     const std::string & endpoint)
     : config(makeConfig(region, scheme, endpoint))
     , client(make_ref<Aws::S3::S3Client>(
-            profile == ""
-            ? std::dynamic_pointer_cast<Aws::Auth::AWSCredentialsProvider>(
-                std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>())
-            : std::dynamic_pointer_cast<Aws::Auth::AWSCredentialsProvider>(
-                std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(profile.c_str())),
+            initAWSCredentials(profile),
             *config,
             // FIXME: https://github.com/aws/aws-sdk-cpp/issues/759
 #if AWS_VERSION_MAJOR == 1 && AWS_VERSION_MINOR < 3
